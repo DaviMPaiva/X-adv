@@ -118,7 +118,7 @@ def train():
     if args.transfer:
         print('Transfer learning...')
         ssd_net.load_weights(args.transfer, isStrict=False)
-        ssd_net.conf_fpn.apply(weights_init)
+        ssd_net.edge_conv2d.apply(weights_init)
 
     if args.cuda:
         net = torch.nn.DataParallel(ssd_net)
