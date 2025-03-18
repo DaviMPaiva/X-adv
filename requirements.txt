@@ -1,4 +1,4 @@
-torchnet==0.0.1
+torchnet
 opencv-python
 kornia
 opencv-python

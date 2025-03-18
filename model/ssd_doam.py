@@ -131,8 +131,15 @@ class SSD_DOAM(nn.Module):
         if ext == '.pkl' or '.pth':
             print('Loading weights into state dict...')
 
-            self.load_state_dict(torch.load(base_file,
-                                 map_location=lambda storage, loc: storage), strict = isStrict)
+
+            state_dict = torch.load(base_file, map_location=lambda storage, loc: storage)
+            # Remove the mismatched weights and biases for the first VGG layer
+            if "vgg.0.weight" in state_dict:
+                del state_dict["vgg.0.weight"]
+            if "vgg.0.bias" in state_dict:
+                del state_dict["vgg.0.bias"]
+            self.load_state_dict(state_dict, strict=isStrict)
+
 
             print('Finished!')
         else:

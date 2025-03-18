@@ -118,10 +118,13 @@ def train():
     if args.transfer:
         print('Transfer learning...')
         ssd_net.load_weights(args.transfer, isStrict=False)
-        ssd_net.edge_conv2d.apply(weights_init)
+        if args.model_arch == "Doam":
+            ssd_net.edge_conv2d.apply(weights_init)
 
     if args.cuda:
+        ssd_net = ssd_net.cuda()  # Move to GPU
         net = torch.nn.DataParallel(ssd_net)
+
     
     if (not args.resume) & (not args.transfer) :
         print('Initializing weights...')
