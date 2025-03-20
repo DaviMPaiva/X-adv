@@ -39,16 +39,16 @@ class SSD_LIM(nn.Module):
         self.vgg = nn.ModuleList(base)  # vgg16
 
         # Layer learns to scale the l2 normalized features from conv4_3
-        self.L2Norm1 = L2Norm(512, 20) 
+        self.L2Norm1 = L2Norm(512, 20)
         self.L2Norm3 = L2Norm(256, 40)
-        self.L2Norm4 = L2Norm(128, 80) 
+        self.L2Norm4 = L2Norm(128, 80)
 
         self.loc_fpn = nn.ModuleList(head_fpn[0])
         self.conf_fpn = nn.ModuleList(head_fpn[1])
         self.DenseFPN = DenseFeaturePyramidNetwork(256, 512, 1024)
 
         self.softmax = nn.Softmax(dim=-1)
-        self.detect = Detect(num_classes, 0, 200, 0.01, 0.45, cfg['variance'])
+        self.detect = Detect(num_classes, 0, 200, 0.01, 0.45, cfg["variance"])
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -77,7 +77,7 @@ class SSD_LIM(nn.Module):
         # apply vgg up to conv4_3 relu
         for k in range(23):  # k=9~10,16~17,,22
             x = self.vgg[k](x)
-            if (k == 15):
+            if k == 15:
                 s = self.L2Norm3(x)
                 FPN_feature.append(s)
 
@@ -93,7 +93,7 @@ class SSD_LIM(nn.Module):
         # apply extra layers and cache source layer outputs
         sources_fpn = self.DenseFPN(FPN_feature)
 
-        for (x, l, c) in zip(sources_fpn, self.loc_fpn, self.conf_fpn):
+        for x, l, c in zip(sources_fpn, self.loc_fpn, self.conf_fpn):
             loc_fpn.append(l(x).permute(0, 2, 3, 1).contiguous())
             conf_fpn.append(c(x).permute(0, 2, 3, 1).contiguous())
         loc_fpn = torch.cat([o.view(o.size(0), -1) for o in loc_fpn], 1)
@@ -102,8 +102,9 @@ class SSD_LIM(nn.Module):
         if self.phase == "test":
             output = self.detect(
                 loc_fpn.view(loc_fpn.size(0), -1, 4),  # loc preds
-                self.softmax(conf_fpn.view(conf_fpn.size(0), -1,
-                                           self.num_classes)),  # conf preds
+                self.softmax(
+                    conf_fpn.view(conf_fpn.size(0), -1, self.num_classes)
+                ),  # conf preds
                 self.priors.to(loc_fpn.device),  # default boxes
             )
 
@@ -111,22 +112,24 @@ class SSD_LIM(nn.Module):
             output = (
                 loc_fpn.view(loc_fpn.size(0), -1, 4),
                 conf_fpn.view(conf_fpn.size(0), -1, self.num_classes),
-                self.priors.to(loc_fpn.device)
+                self.priors.to(loc_fpn.device),
             )
 
         return output
 
     def load_weights(self, base_file, isStrict=True):
         other, ext = os.path.splitext(base_file)
-        if ext == '.pkl' or '.pth':
-            print('Loading weights into state dict...')
+        if ext == ".pkl" or ".pth":
+            print("Loading weights into state dict...")
 
-            self.load_state_dict(torch.load(base_file,
-                                            map_location=lambda storage, loc: storage), strict=isStrict)
+            self.load_state_dict(
+                torch.load(base_file, map_location=lambda storage, loc: storage),
+                strict=isStrict,
+            )
 
-            print('Finished!')
+            print("Finished!")
         else:
-            print('Sorry only .pth and .pkl files supported.')
+            print("Sorry only .pth and .pkl files supported.")
 
 
 # This function is derived from torchvision VGG make_layers()
@@ -135,9 +138,9 @@ def vgg(cfg, i, batch_norm=False):
     layers = []
     in_channels = i
     for v in cfg:
-        if v == 'M':
+        if v == "M":
             layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-        elif v == 'C':
+        elif v == "C":
             layers += [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True)]
         else:
             conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
@@ -149,8 +152,7 @@ def vgg(cfg, i, batch_norm=False):
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
     conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
     conv7 = nn.Conv2d(1024, 1024, kernel_size=1)
-    layers += [pool5, conv6,
-               nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
+    layers += [pool5, conv6, nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
     return layers
 
 
@@ -160,10 +162,17 @@ def add_extras(cfg, i, batch_norm=False):
     in_channels = i
     flag = False
     for k, v in enumerate(cfg):
-        if in_channels != 'S':
-            if v == 'S':
-                layers += [nn.Conv2d(in_channels, cfg[k + 1],
-                                     kernel_size=(1, 3)[flag], stride=2, padding=1)]
+        if in_channels != "S":
+            if v == "S":
+                layers += [
+                    nn.Conv2d(
+                        in_channels,
+                        cfg[k + 1],
+                        kernel_size=(1, 3)[flag],
+                        stride=2,
+                        padding=1,
+                    )
+                ]
             else:
                 layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag])]
             flag = not flag
@@ -171,33 +180,46 @@ def add_extras(cfg, i, batch_norm=False):
     return layers
 
 
-
 def multibox_fpn(cfg, num_classes):
     loc_layers = []
     conf_layers = []
     fpn_source = [256, 256, 256, 256, 256]
     for k, v in enumerate(fpn_source):
-        loc_layers += [nn.Conv2d(v,
-                                 cfg[k] * 4, kernel_size=3, padding=1)]
-        conf_layers += [nn.Conv2d(v,
-                                  cfg[k] * num_classes, kernel_size=3,
-                                  padding=1)]
+        loc_layers += [nn.Conv2d(v, cfg[k] * 4, kernel_size=3, padding=1)]
+        conf_layers += [nn.Conv2d(v, cfg[k] * num_classes, kernel_size=3, padding=1)]
 
     return (loc_layers, conf_layers)
 
 
 base = {
-    '300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
-            512, 512, 512],
-    '512': [],
+    "300": [
+        64,
+        64,
+        "M",
+        128,
+        128,
+        "M",
+        256,
+        256,
+        256,
+        "C",
+        512,
+        512,
+        512,
+        "M",
+        512,
+        512,
+        512,
+    ],
+    "512": [],
 }
 extras = {
-    '300': [256, 'S', 512, 128, 'S', 256, 128, 256, 128, 256],
-    '512': [],
+    "300": [256, "S", 512, 128, "S", 256, 128, 256, 128, 256],
+    "512": [],
 }
 mbox = {
-    '300': [4, 4, 6, 6, 6],  # number of boxes per feature map location
-    '512': [],
+    "300": [4, 4, 6, 6, 6],  # number of boxes per feature map location
+    "512": [],
 }
 
 
@@ -206,12 +228,17 @@ def build_ssd(phase, size=300, num_classes=21):
         print("ERROR: Phase: " + phase + " not recognized")
         return
     if size != 300:
-        print("ERROR: You specified size " + repr(size) + ". However, " +
-              "currently only SSD300 (size=300) is supported!")
+        print(
+            "ERROR: You specified size "
+            + repr(size)
+            + ". However, "
+            + "currently only SSD300 (size=300) is supported!"
+        )
         return
     head_fpn = multibox_fpn(mbox[str(size)], num_classes)
-    from data.config import MuBo
-    return SSD_LIM(phase, size, vgg(base[str(size)], 3), num_classes, head_fpn, MuBo)
+    from data.config import LIM
+
+    return SSD_LIM(phase, size, vgg(base[str(size)], 3), num_classes, head_fpn, LIM)
 
 
 class FeaturePyramidNetwork(nn.Module):
@@ -221,25 +248,33 @@ class FeaturePyramidNetwork(nn.Module):
         # upsample C5 to get P5 from the FPN paper
         self.P5_1 = nn.Conv2d(C5_size, feature_size, kernel_size=1, stride=1, padding=0)
 
-        self.P5_upsampled = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P5_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P5_upsampled = nn.Upsample(scale_factor=2, mode="nearest")
+        self.P5_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=1, padding=1
+        )
 
         # add P5 elementwise to C4
         self.P4_1 = nn.Conv2d(C4_size, feature_size, kernel_size=1, stride=1, padding=0)
 
-        self.P4_upsampled = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P4_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P4_upsampled = nn.Upsample(scale_factor=2, mode="nearest")
+        self.P4_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=1, padding=1
+        )
 
         # add P4 elementwise to C3
         self.P3_1 = nn.Conv2d(C3_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P3_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P3_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=1, padding=1
+        )
 
         # "P6 is obtained via a 3x3 stride-2 conv on C5"
         self.P6 = nn.Conv2d(C5_size, feature_size, kernel_size=3, stride=2, padding=1)
 
         # "P7 is computed by applying ReLU followed by a 3x3 stride-2 conv on P6"
         self.P7_1 = nn.ReLU()
-        self.P7_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=2, padding=1)
+        self.P7_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=2, padding=1
+        )
 
     def forward(self, inputs):
         C3, C4, C5 = inputs
@@ -270,28 +305,42 @@ class DenseFeaturePyramidNetwork(nn.Module):
 
         # upsample C5 to get P5 from the FPN paper
         self.P5_1 = nn.Conv2d(C5_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P5_1_dual = nn.Conv2d(C5_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P5_upsampled_1 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P5_upsampled_2 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P5_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P5_1_dual = nn.Conv2d(
+            C5_size, feature_size, kernel_size=1, stride=1, padding=0
+        )
+        self.P5_upsampled_1 = nn.Upsample(scale_factor=2, mode="nearest")
+        self.P5_upsampled_2 = nn.Upsample(scale_factor=2, mode="nearest")
+        self.P5_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=1, padding=1
+        )
 
         # add P5 elementwise to C4
         self.P4_1 = nn.Conv2d(C4_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P4_1_dual = nn.Conv2d(C4_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P4_upsampled_1 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P4_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P4_1_dual = nn.Conv2d(
+            C4_size, feature_size, kernel_size=1, stride=1, padding=0
+        )
+        self.P4_upsampled_1 = nn.Upsample(scale_factor=2, mode="nearest")
+        self.P4_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=1, padding=1
+        )
 
         # add P4 elementwise to C3
         self.P3_1 = nn.Conv2d(C3_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P3_1_dual = nn.Conv2d(C3_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P3_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P3_1_dual = nn.Conv2d(
+            C3_size, feature_size, kernel_size=1, stride=1, padding=0
+        )
+        self.P3_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=1, padding=1
+        )
 
         # "P6 is obtained via a 3x3 stride-2 conv on C5"
         self.P6 = nn.Conv2d(C5_size, feature_size, kernel_size=3, stride=2, padding=1)
 
         # "P7 is computed by applying ReLU followed by a 3x3 stride-2 conv on P6"
         self.P7_1 = nn.ReLU()
-        self.P7_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=2, padding=1)
+        self.P7_2 = nn.Conv2d(
+            feature_size, feature_size, kernel_size=3, stride=2, padding=1
+        )
 
         self.corner_proc_C3 = Boundary_Aggregation(256)
         self.corner_proc_C4 = Boundary_Aggregation(512)
@@ -304,7 +353,6 @@ class DenseFeaturePyramidNetwork(nn.Module):
         self.gamma_3 = nn.Parameter(torch.zeros(1))
         self.gamma_4 = nn.Parameter(torch.zeros(1))
         self.gamma_5 = nn.Parameter(torch.zeros(1))
-
 
     def forward(self, inputs):
         C3, C4, C5 = inputs  # 150，75,38,19
@@ -385,6 +433,3 @@ class RegressionModel(nn.Module):
         # out is B x C x W x H, with C = 4*num_anchors
         out = out.permute(0, 2, 3, 1)
         return out.contiguous().view(out.shape[0], -1, 4)
-
-
-

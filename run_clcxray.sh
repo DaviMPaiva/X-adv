@@ -1,0 +1,3 @@
+python train_ssd.py --dataset "CLCXray" --model_arch "original" --transfer ./weights/ssd300_mAP_77.43_v2.pth --save_folder ./save/CLCXray/original/
+python train_ssd.py --dataset "CLCXray" --model_arch "DOAM" --transfer ./weights/ssd300_mAP_77.43_v2.pth --save_folder ./save/CLCXray/DOAM/
+python train_ssd.py --dataset "CLCXray" --model_arch "LIM" --transfer ./weights/ssd300_mAP_77.43_v2.pth --save_folder ./save/CLCXray/LIM/
