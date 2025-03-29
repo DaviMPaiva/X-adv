@@ -30,6 +30,10 @@ The XAD dataset will be released after accepted.
 
 Please refer to [**this website**](https://github.com/DIG-Beihang/XrayDetection) to acquire download links.
 
+#### CLCXray
+
+Original version of the CLCXray dataset is available at [**this link**](https://github.com/GreysonPhoenix/CLCXray). Processed version for application is this code is present [**here**](https://drive.google.com/drive/u/1/folders/1EM8-GrITafcwCW81rkxDjCH5tN-auh-T).
+
 #### Data Structure
 
 The downloaded data should look like this:
@@ -61,7 +65,7 @@ For Faster R-CNN models, we apply the pre-trained weight from [this issue](https
 Training for SSD models (original, DOAM, LIM):
 
 ```shell
-python train_ssd.py --dataset OPIXray/HiXray/XAD \
+python train_ssd.py --dataset OPIXray/HiXray/XAD/CLCXray \
     --model_arch original/DOAM/LIM \
     --transfer ./weights/ssd300_mAP_77.43_v2.pth \
     --save_folder ./save
@@ -70,7 +74,7 @@ python train_ssd.py --dataset OPIXray/HiXray/XAD \
 Training for Faster R-CNN:
 
 ```shell
-python train_frcnn.py --dataset OPIXray/HiXray/XAD \
+python train_frcnn.py --dataset OPIXray/HiXray/XAD/CLCXray \
     --transfer ./weights/vgg16-397923af.pth \
     --save_folder ./save
 ```
@@ -80,7 +84,7 @@ python train_frcnn.py --dataset OPIXray/HiXray/XAD \
 Attack SSD models (original, DOAM, LIM) with X-Adv:
 
 ```shell
-python attack_ssd.py --dataset OPIXray/HiXray/XAD \
+python attack_ssd.py --dataset OPIXray/HiXray/XAD/CLCXray \
     --model_arch original/DOAM/LIM \
     --ckpt_path ../weights/model.pth \
     --patch_place reinforce \
@@ -91,7 +95,7 @@ python attack_ssd.py --dataset OPIXray/HiXray/XAD \
 Attack Faster R-CNN with X-Adv:
 
 ```shell
-python attack_frcnn.py --dataset OPIXray/HiXray/XAD \
+python attack_frcnn.py --dataset OPIXray/HiXray/XAD/CLCXray \
     --patch_place reinforce \
     --ckpt_path ../weights/model.pth \
     --patch_material iron \
@@ -106,12 +110,34 @@ Below are some combinations of `patch_place` and `patch_material`:
 | AdvPatch          | fix_patch     | iron             |
 | X-Adv | reinforce     | iron             |
 
+### Experiments with Loss
+
+```shell
+python attack_ssd_loss.py --dataset OPIXray/HiXray/XAD/CLCXray \
+    --model_arch original/DOAM/LIM \
+    --ckpt_path ../weights/model.pth \
+    --patch_place reinforce \
+    --patch_material iron \
+    --save_path ./results
+```
+
+### Experiments with Patch+Reinforcement Learning
+
+```shell
+python attack_ssd_patch.py --dataset OPIXray/HiXray/XAD/CLCXray \
+    --model_arch original/DOAM/LIM \
+    --ckpt_path ../weights/model.pth \
+    --patch_place reinforce \
+    --patch_material iron \
+    --save_path ./results
+```
+
 ### Evaluation
 
 Evaluate SSD models (original, DOAM, LIM):
 
 ```shell
-python test_ssd.py --dataset OPIXray/HiXray/XAD \
+python test_ssd.py --dataset OPIXray/HiXray/XAD/CLCXray \
     --model_arch original/DOAM/LIM \
     --ckpt_path ../weights/model.pth \
     --phase path/to/your/adver_image
@@ -120,7 +146,7 @@ python test_ssd.py --dataset OPIXray/HiXray/XAD \
 Evaluate Faster R-CNN:
 
 ```shell
-python test_frcnn.py --dataset OPIXray/HiXray/XAD \
+python test_frcnn.py --dataset OPIXray/HiXray/XAD/CLCXray \
     --ckpt_path ../weights/model.pth \
     --phase path/to/your/adver_image
 ```
