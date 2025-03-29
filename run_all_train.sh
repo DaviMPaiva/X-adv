@@ -1,5 +1,3 @@
-#!/bin/bash
-
 python train_ssd.py --dataset "OPIXray" --model_arch "original" --transfer ./weights/ssd300_mAP_77.43_v2.pth --save_folder ./save/OPIXray/original/
 python train_ssd.py --dataset "OPIXray" --model_arch "DOAM" --transfer ./weights/ssd300_mAP_77.43_v2.pth --save_folder ./save/OPIXray/DOAM/
 python train_ssd.py --dataset "OPIXray" --model_arch "LIM" --transfer ./weights/ssd300_mAP_77.43_v2.pth --save_folder ./save/OPIXray/LIM/

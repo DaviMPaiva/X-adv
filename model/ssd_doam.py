@@ -134,10 +134,10 @@ class SSD_DOAM(nn.Module):
 
             state_dict = torch.load(base_file, map_location=lambda storage, loc: storage)
             # Remove the mismatched weights and biases for the first VGG layer
-            if "vgg.0.weight" in state_dict:
-                del state_dict["vgg.0.weight"]
-            if "vgg.0.bias" in state_dict:
-                del state_dict["vgg.0.bias"]
+            # if "vgg.0.weight" in state_dict:
+            #     del state_dict["vgg.0.weight"]
+            # if "vgg.0.bias" in state_dict:
+            #     del state_dict["vgg.0.bias"]
             self.load_state_dict(state_dict, strict=isStrict)
 
 
