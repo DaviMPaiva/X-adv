@@ -109,10 +109,16 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--gamma", 
-    type=float, 
-    default=0.001,
-    help="Weight for original loss in mixed strategy (default: 0.1)"
+    "--alpha",
+    type=float,
+    default=2.0,
+    help="Weight for focused loss in mixed strategy (default: 2.0)",
+)
+parser.add_argument(
+    "--gamma",
+    type=float,
+    default=1.0,
+    help="Weight for original loss in mixed strategy (default: 1.0)",
 )
 
 parser.add_argument(
@@ -164,14 +170,42 @@ args.save_path = os.path.join(
 fix_seed(args.seed)
 print(args)
 
+
 class FocusedMultiBoxLoss(nn.Module):
-    def __init__(self, num_classes, focus_class, threshold=0.5, negpos_ratio=3):
+    def __init__(
+        self, num_classes, focus_class, class_names, threshold=0.5, negpos_ratio=3
+    ):
         super().__init__()
+        # Validate class index
+        if focus_class < 0 or focus_class >= num_classes:
+            raise ValueError(
+                f"Invalid focus_class: {focus_class}. Must be 0-based index between 0-{num_classes-1}"
+            )
+
+        # Get class name (handle background case)
+        if focus_class == 0:
+            class_name = "background"
+        else:
+            try:
+                class_name = class_names[focus_class - 1]  # Offset for background class
+            except IndexError:
+                class_name = "unknown_class"
+
+        print("\n" + "=" * 60)
+        print("FOCUSED ATTACK CONFIGURATION")
+        print(f"Targeting class index: {focus_class}")
+        print(f"Class name: {class_name}")
+        print(f"Valid classes (0-based):")
+        print("[0] background")
+        for i, name in enumerate(class_names, 1):
+            print(f"[{i}] {name}")
+        print("=" * 60 + "\n")
+
         self.num_classes = num_classes
-        self.focus_class = focus_class  # Class index to target (e.g., y)
+        self.focus_class = focus_class
         self.threshold = threshold
         self.negpos_ratio = negpos_ratio
-        self.variance = config.original["variance"]  # Adjust based on your config
+        self.variance = config.original["variance"]
 
     def forward(self, predictions, targets):
         loc_data, conf_data, priors = predictions
@@ -181,16 +215,22 @@ class FocusedMultiBoxLoss(nn.Module):
         # Match priors to ground truth boxes
         loc_t = torch.zeros(batch_size, num_priors, 4).cuda()
         conf_t = torch.zeros(batch_size, num_priors).long().cuda()
-        
+
         for idx in range(batch_size):
             truths = targets[idx][:, :-1].cuda()  # Ground truth boxes
-            labels = targets[idx][:, -1].cuda()   # Class labels
+            labels = targets[idx][:, -1].cuda()  # Class labels
             defaults = priors.cuda()
-            
+
             # Match priors to ground truth (modify this based on your matching logic)
             match(
-                self.threshold, truths, defaults, self.variance, labels,
-                loc_t, conf_t, idx
+                self.threshold,
+                truths,
+                defaults,
+                self.variance,
+                labels,
+                loc_t,
+                conf_t,
+                idx,
             )
 
         # Mask to focus ONLY on the target class
@@ -206,12 +246,12 @@ class FocusedMultiBoxLoss(nn.Module):
         # Confidence Loss (only for the focus class)
         conf_p = conf_data.view(-1, self.num_classes)
         conf_t_masked = conf_t.view(-1)
-        
+
         # Filter out non-focus class anchors
         mask = conf_t_masked == self.focus_class
         conf_p_focused = conf_p[mask]
         conf_t_focused = conf_t_masked[mask]
-        
+
         if conf_p_focused.numel() > 0:
             loss_c = F.cross_entropy(conf_p_focused, conf_t_focused, reduction="sum")
         else:
@@ -222,25 +262,27 @@ class FocusedMultiBoxLoss(nn.Module):
         loss_l /= N
         loss_c /= N
 
-        return loss_l + loss_c 
-    
+        return loss_l + loss_c
+
+
 class MixedLoss(nn.Module):
-    def __init__(self, focus_criterion, original_criterion, gamma=0.1):
+    def __init__(self, focus_criterion, original_criterion, alpha=2.0, gamma=1.0):
         super().__init__()
-        self.focus_criterion = focus_criterion  # Now returns tensor
-        self.original_criterion = original_criterion  # Returns tuple
-        self.gamma = gamma
+        self.focus_criterion = focus_criterion  # Focused loss component
+        self.original_criterion = original_criterion  # Original loss component
+        self.alpha = alpha  # Coefficient for focused loss
+        self.gamma = gamma  # Coefficient for original loss
 
     def forward(self, predictions, targets):
-        # Focus loss is now a single tensor
+        # Focus loss component
         focus_loss = self.focus_criterion(predictions, targets)
-        
-        # Original loss is a tuple (loss_l, loss_c)
+
+        # Original loss components (localization + confidence)
         orig_loss_l, orig_loss_c = self.original_criterion(predictions, targets)
-        #print(focus_loss)
-        # Combine losses
-        total_loss = 1000*focus_loss + self.gamma * (orig_loss_l + orig_loss_c)
-        
+
+        # Combine losses with respective coefficients
+        total_loss = self.alpha * focus_loss + self.gamma * (orig_loss_l + orig_loss_c)
+
         return total_loss
 
 
@@ -602,7 +644,7 @@ if __name__ == "__main__":
     num_classes = len(data_info["model_classes"]) + 1
     if args.model_arch == "DOAM":
         from model.ssd_doam import build_ssd
-        
+
         cfg = config.DOAM
         net = build_ssd("test", size=300, num_classes=num_classes)
     elif args.model_arch == "LIM":
@@ -643,7 +685,7 @@ if __name__ == "__main__":
     )
 
     original_criterion = MultiBoxLoss(
-            num_classes, 0.5, True, 0, True, 3, 0.5, False, cfg["variance"]
+        num_classes, 0.5, True, 0, True, 3, 0.5, False, cfg["variance"]
     ).cuda()
 
     if args.targeted:
@@ -652,15 +694,22 @@ if __name__ == "__main__":
         focus_criterion = FocusedMultiBoxLoss(
             num_classes=num_classes,
             focus_class=args.focus_class,
+            class_names=data_info["model_classes"],  # Pass actual class names
             threshold=0.5,
             negpos_ratio=3,
         ).cuda()
-    
+
         # Mixed loss combining both
-        criterion = MixedLoss(focus_criterion, original_criterion, gamma=0.1).cuda()
+        # When args.focus_class is specified, use MixedLoss with alpha and gamma
+        criterion = MixedLoss(
+            focus_criterion=focus_criterion,
+            original_criterion=original_criterion,
+            alpha=args.alpha,
+            gamma=args.gamma,
+        ).cuda()
     else:
         criterion = original_criterion
-        
+
     num_images = len(dataset)
 
     if not os.path.exists(args.save_path):
